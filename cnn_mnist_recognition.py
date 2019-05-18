@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 
+import os
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
+
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+tf.app.flags.DEFINE_boolean("is_train", False, "指定程序是训练还是测试")
+FLAGS = tf.app.flags.FLAGS
 
 
 # 定义一个初始化权重的函数
@@ -89,7 +95,7 @@ def conv_fc():
 
     # 4.梯度下降求出损失
     with tf.variable_scope("optimizer"):
-        train_op = tf.train.GradientDescentOptimizer(0.0001).minimize(loss)
+        train_op = tf.train.GradientDescentOptimizer(0.00005).minimize(loss)
 
     # 5.计算准确率
     with tf.variable_scope("acc"):
@@ -100,23 +106,54 @@ def conv_fc():
     # 定义一个初始化变量的op
     init_op = tf.global_variables_initializer()
 
+    # 创建一个saver
+    saver = tf.train.Saver()
+
+
     # 开启会话运行
     with tf.Session() as sess:
         sess.run(init_op)
 
-        # 循环训练
-        for i in range(10000):
-            # 取出真实存在的特征值和目标值
-            mnist_x, mnist_y = mnist.train.next_batch(50)
+        if FLAGS.is_train:
+            # 循环训练
+            for i in range(10000):
+                # 取出真实存在的特征值和目标值
+                mnist_x, mnist_y = mnist.train.next_batch(50)
 
-            # 运行train_op训练
-            sess.run(train_op, feed_dict={x:mnist_x, y_true:mnist_y})
-            print("训练%d步，准确率为：%f"%(i+1, sess.run(accuracy, feed_dict={x:mnist_x, y_true:mnist_y})))
+                # 运行train_op训练
+                sess.run(train_op, feed_dict={x:mnist_x, y_true:mnist_y})
+                print("训练%d步，准确率为：%f"%(i+1, sess.run(accuracy, feed_dict={x:mnist_x, y_true:mnist_y})))
 
+                # 每训练1000步保存一次模型
+                if (i+1)%500 == 0:
 
+                    if not os.path.exists("./model"):
+                        os.mkdir("./model")
 
+                    # 保存模型
+                    saver.save(sess, "./model/cnn_mnist_recognition")
+        else:
+            # 加载模型
+            saver.restore(sess, "./model/cnn_mnist_recognition")
 
+            true_count = 0
+            for i in range(500):
+                # 每次测试一张图片
+                x_test, y_test = mnist.test.next_batch(1)
 
+                mnist_true = tf.argmax(y_test, 1).eval()
+                mnist_predict = tf.argmax(sess.run(y_predict, feed_dict={x:x_test, y_true:y_test}), 1).eval()
+
+                print("第%d次测试: 真实值：%d, 预测值：%d" %(
+                    i+1,
+                    mnist_true,
+                    mnist_predict
+                ))
+
+                if mnist_predict == mnist_true:
+                    true_count += 1
+            acc = true_count/500*100
+            print("准确率：%.2f%%" % acc)
 
 
 
